@@ -1,0 +1,28 @@
+data:
+  train_dir: "data/train"
+  val_dir: "data/val"
+  test_dir: "data/testA"
+  image_size: [128, 160]
+
+model:
+  name: "R2AttU_Net"
+  in_channels: 3
+  out_channels: 1
+
+train:
+  batch_size: 64
+  epochs: 150
+  lr: !!float 2e-4
+  weight_decay: !!float 1e-5
+  patience: 6
+
+test:
+  batch_size: 16
+
+logging:
+  log_dir: "outputs/logs"
+  checkpoint_dir: "outputs/checkpoints"
+
+model_path: outputs/checkpoints/R2AttU_Net/best_model.pth
+#model_path: outputs/checkpoints/NestedUNet/best_model.pth
+
