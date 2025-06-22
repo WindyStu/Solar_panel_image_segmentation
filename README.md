@@ -91,27 +91,25 @@ pip install -r requirements.txt
 
 ### Training a Model
 ```bash
-python scripts/train.py --config models/configs/unet_config.json --data-dir data/processed
-```
-
-### Evaluating a Model
-```bash
-python scripts/evaluate.py --model-path models/saved_models/best_model.pth --test-dir data/processed/test
+python run.py --config configs/base.yaml 
 ```
 
 ### Making Predictions
 ```bash
-python scripts/predict.py --input-image images/sample.jpg --model-path models/saved_models/best_model.pth --output-dir predictions/
+python src/predict.py --model_path outputs/checkpoints/best_model.pth --test_dir data/testA --output_dir submissions/22211870121
+```
+
+### watching training logs
+```bash
+tensorboard --logdir=outputs/logs
 ```
 
 ## Model Metrics
 
 The models are evaluated using standard segmentation metrics:
 - Intersection over Union (IoU)
-- Dice Coefficient
 - Pixel Accuracy
 - Mean IoU (mIoU)
-- F1 Score
  
 ## Results and Visualization & Performance Metrics
 see report.md
