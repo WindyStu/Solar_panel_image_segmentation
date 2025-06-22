@@ -41,6 +41,49 @@ class DiceBCELoss(nn.Module):
 
         return self.weight * bce_loss + (1 - self.weight) * dice_loss
 
+class DiceBCELoss_with_L2(nn.Module):
+    def __init__(self,weight=0.5, smooth=1e-6):
+        super().__init__()
+        self.weight = weight
+        self.smooth = smooth
+        self.bce = nn.BCEWithLogitsLoss()
+
+    def forward(self, model, inputs, targets):
+        """
+        Args:
+            inputs: [B,1,H,W] 未激活的logits
+            targets: [B,H,W] 二值化掩码(0/1)
+            :param model:
+        """
+        # 维度处理：移除通道维度（如果target是[B,1,H,W]）
+        if targets.dim() == 4:
+            targets = targets.squeeze(1)
+        assert targets.dim() == 3, f"Target should be [B,H,W], got {targets.shape}"
+
+        # 输入校验
+        assert torch.all((targets == 0) | (targets == 1)), "Target must be binary (0/1)"
+        targets = targets.float()
+        inputs = inputs.squeeze(1)  # [B,1,H,W] -> [B,H,W]
+
+        # 展平处理
+        inputs = inputs.view(-1)  # [B*H*W]
+        targets = targets.view(-1)
+
+        # BCE计算（自动处理logits）
+        bce_loss = self.bce(inputs, targets)
+
+        # Dice计算（inputs需sigmoid）
+        probas = torch.sigmoid(inputs)
+        intersection = (probas * targets).sum()
+        denominator = (probas.sum() + targets.sum())
+        dice_loss = 1 - (2. * intersection + self.smooth) / (denominator + self.smooth)
+
+        l2_reg = torch.tensor(0., device=inputs.device)
+        for param in model.parameters():
+            l2_reg += torch.norm(param)
+
+        return self.weight * bce_loss + (1 - self.weight) * dice_loss + 0.0001 * l2_reg
+
 
 class DynamicDiceBCELoss(nn.Module):
     def __init__(self, init_weight=0.5, smooth=1e-6):
@@ -49,29 +92,42 @@ class DynamicDiceBCELoss(nn.Module):
         self.smooth = smooth
         self.bce = nn.BCEWithLogitsLoss()
 
-    def forward(self, inputs, targets):
-        # 维度处理
+    def forward(self, model, inputs, targets):
+        """
+        Args:
+            inputs: [B,1,H,W] 未激活的logits
+            targets: [B,H,W] 二值化掩码(0/1)
+            :param model:
+        """
+        # 维度处理：移除通道维度（如果target是[B,1,H,W]）
         if targets.dim() == 4:
             targets = targets.squeeze(1)
-        inputs = inputs.squeeze(1)
-        targets = targets.float()
+        assert targets.dim() == 3, f"Target should be [B,H,W], got {targets.shape}"
 
-        # 展平
-        inputs = inputs.view(-1)
+        # 输入校验
+        assert torch.all((targets == 0) | (targets == 1)), "Target must be binary (0/1)"
+        targets = targets.float()
+        inputs = inputs.squeeze(1)  # [B,1,H,W] -> [B,H,W]
+
+        # 展平处理
+        inputs = inputs.view(-1)  # [B*H*W]
         targets = targets.view(-1)
 
-        # BCE计算
+        # BCE计算（自动处理logits）
         bce_loss = self.bce(inputs, targets)
 
-        # Dice计算
+        # Dice计算（inputs需sigmoid）
         probas = torch.sigmoid(inputs)
         intersection = (probas * targets).sum()
         denominator = (probas.sum() + targets.sum())
         dice_loss = 1 - (2. * intersection + self.smooth) / (denominator + self.smooth)
 
-        # 动态权重
-        w = torch.sigmoid(self.weight)
-        return w * bce_loss + (1 - w) * dice_loss
+        l2_reg = torch.tensor(0., device=inputs.device)
+        for param in model.parameters():
+            l2_reg += torch.norm(param)
+
+        return self.weight * bce_loss + (1 - self.weight) * dice_loss + 0.0001 * l2_reg
+
 
 
 def edge_aware_loss(pred, target, edge_ratio=3.0, kernel_size=3):
@@ -147,7 +203,7 @@ class SolarPanelLoss(nn.Module):
         self.edge_ratio = edge_ratio
         self.gamma = gamma
 
-    def forward(self, pred, target):
+    def forward(self, model, pred, target):
         """
         Args:
             pred: [B,1,H,W] 模型输出的logits
@@ -159,7 +215,7 @@ class SolarPanelLoss(nn.Module):
         target = target.float()
 
         # 主损失
-        main_loss = self.dice_bce(pred, target)
+        main_loss = self.dice_bce(model, pred, target)
 
         # 边缘增强
         edge_loss = edge_aware_loss(pred, target, self.edge_ratio)

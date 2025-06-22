@@ -176,16 +176,21 @@ class R2U_Net(nn.Module):
     def __init__(self, img_ch=3, output_ch=1, t=2):
         super(R2U_Net, self).__init__()
 
+        # 定义初始卷积核数量
         n1 = 64
+        # 定义卷积核数量列表
         filters = [n1, n1 * 2, n1 * 4, n1 * 8, n1 * 16]
 
+        # 定义最大池化层
         self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.Maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.Maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.Maxpool3 = nn.MaxPool2d(kernel_size=2, stride=2)
 
+        # 定义上采样层
         self.Upsample = nn.Upsample(scale_factor=2)
 
+        # 定义RRCNN块
         self.RRCNN1 = RRCNN_block(img_ch, filters[0], t=t)
 
         self.RRCNN2 = RRCNN_block(filters[0], filters[1], t=t)
@@ -196,7 +201,12 @@ class R2U_Net(nn.Module):
 
         self.RRCNN5 = RRCNN_block(filters[3], filters[4], t=t)
 
+        # 定义上采样卷积层
         self.Up5 = up_conv(filters[4], filters[3])
+        self.Up4 = up_conv(filters[3], filters[2])
+        self.Up3 = up_conv(filters[2], filters[1])
+        self.Up2 = up_conv(filters[1], filters[0])
+        # 定义上采样RRCNN块
         self.Up_RRCNN5 = RRCNN_block(filters[4], filters[3], t=t)
 
         self.Up4 = up_conv(filters[3], filters[2])
@@ -381,8 +391,8 @@ class R2AttU_Net(nn.Module):
     def __init__(self, in_ch=3, out_ch=1, t=2):
         super(R2AttU_Net, self).__init__()
 
-        n1 = 64
-        filters = [n1, n1 * 2, n1 * 4, n1 * 8, n1 * 16]
+        n1 = 32
+        filters = [n1, n1 * 2, n1 * 4, n1 * 8]
 
         self.Maxpool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.Maxpool2 = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -393,11 +403,11 @@ class R2AttU_Net(nn.Module):
         self.RRCNN2 = RRCNN_block(filters[0], filters[1], t=t)
         self.RRCNN3 = RRCNN_block(filters[1], filters[2], t=t)
         self.RRCNN4 = RRCNN_block(filters[2], filters[3], t=t)
-        self.RRCNN5 = RRCNN_block(filters[3], filters[4], t=t)
+        # self.RRCNN5 = RRCNN_block(filters[3], filters[4], t=t)
 
-        self.Up5 = up_conv(filters[4], filters[3])
-        self.Att5 = Attention_block(F_g=filters[3], F_l=filters[3], F_int=filters[2])
-        self.Up_RRCNN5 = RRCNN_block(filters[4], filters[3], t=t)
+        # self.Up5 = up_conv(filters[4], filters[3])
+        # self.Att5 = Attention_block(F_g=filters[3], F_l=filters[3], F_int=filters[2])
+        # self.Up_RRCNN5 = RRCNN_block(filters[4], filters[3], t=t)
 
         self.Up4 = up_conv(filters[3], filters[2])
         self.Att4 = Attention_block(F_g=filters[2], F_l=filters[2], F_int=filters[1])
@@ -412,30 +422,31 @@ class R2AttU_Net(nn.Module):
         self.Up_RRCNN2 = RRCNN_block(filters[1], filters[0], t=t)
 
         self.Conv = nn.Conv2d(filters[0], out_ch, kernel_size=1, stride=1, padding=0)
+        self.dropout = nn.Dropout2d(0.3)
 
     # self.active = torch.nn.Sigmoid()
 
     def forward(self, x):
         e1 = self.RRCNN1(x)
 
-        e2 = self.Maxpool1(e1)
+        e2 = self.dropout(self.Maxpool1(e1))
         e2 = self.RRCNN2(e2)
 
-        e3 = self.Maxpool2(e2)
+        e3 = self.dropout(self.Maxpool2(e2))
         e3 = self.RRCNN3(e3)
 
-        e4 = self.Maxpool3(e3)
+        e4 = self.dropout(self.Maxpool3(e3))
         e4 = self.RRCNN4(e4)
 
-        e5 = self.Maxpool4(e4)
-        e5 = self.RRCNN5(e5)
+        # e5 = self.Maxpool4(e4)
+        # e5 = self.RRCNN5(e5)
 
-        d5 = self.Up5(e5)
-        e4 = self.Att5(g=d5, x=e4)
-        d5 = torch.cat((e4, d5), dim=1)
-        d5 = self.Up_RRCNN5(d5)
+        # d5 = self.Up5(e5)
+        # e4 = self.Att5(g=d5, x=e4)
+        # d5 = torch.cat((e4, d5), dim=1)
+        # d5 = self.Up_RRCNN5(d5)
 
-        d4 = self.Up4(d5)
+        d4 = self.Up4(e4)
         e3 = self.Att4(g=d4, x=e3)
         d4 = torch.cat((e3, d4), dim=1)
         d4 = self.Up_RRCNN4(d4)

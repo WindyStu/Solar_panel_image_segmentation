@@ -11,6 +11,8 @@ from data.dataset import SolarPanelDataset
 from data.transforms import get_val_transforms
 # from models.unet import UNet
 from models.nested_unet import NestedUNet,U_Net
+from models.DeepLabv3 import DeepLabV3Plus
+from models.improved_unet import LightweightUNet
 from utils.postprocess import post_process
 
 
@@ -21,7 +23,9 @@ class Predictor:
 
         # 加载模型
         # self.model = UNet(n_channels=3, n_classes=1).to(self.device)
-        self.model = U_Net(in_ch=3, out_ch=1).to(self.device)
+        # self.model = U_Net(in_ch=3, out_ch=1).to(self.device)
+        # self.model = DeepLabV3Plus(n_classes=1).to(self.device)
+        self.model = LightweightUNet().to(self.device)
         self.model.load_state_dict(torch.load(config['model_path']))
         self.model.eval()
 

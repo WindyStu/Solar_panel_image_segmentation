@@ -1,48 +1,65 @@
-# Lab Report: Image Segmentation for Photovoltaic Panel Detection
+# Lab Report: Image Segmentation for Photovoltaic Panel Detection  
 
-## Background
-- **Dataset Description**
-  - Training Set: 2,693 images
-  - Test Set A: 336 images
-  - Test Set B: 338 images (final evaluation criterion)
-- **Evaluation Metrics**
-  - Intersection over Union (IoU)
-  - $\frac{TP}{TP+FP+FN}$
-- **Image Specifications**
-  - Input Image Size: 160×128 pixels
-  - Image Naming Convention: image0.JPG
-  - Mask Naming Convention: mask0.JPG
-  - Prediction Naming Convention: pred0.JPG
+## Background  
+- **Dataset Description**  
+  - Training Set: 2,693 images  
+  - Test Set A: 336 images  
+  - Test Set B: 338 images (final evaluation criterion)  
+- **Evaluation Metrics**  
+  - Intersection over Union (IoU)  
+  - $\frac{TP}{TP+FP+FN}$  
+- **Image Specifications**  
+  - Input Image Size: 160×128 pixels  
+  - Image Naming Convention: `image0.JPG`  
+  - Mask Naming Convention: `mask0.JPG`  
+  - Prediction Naming Convention: `pred0.JPG`  
 
-## 使用命令行训练/预测，查看日志信息
-```shell
-python run.py --config configs/base.yaml #train
-```
+## Command Line Usage for Training/Prediction and Logging  
+```shell  
+python run.py --config configs/base.yaml  # Training  
+```  
 
-```shell
-python src/predict.py --model_path outputs/checkpoints/best_model.pth --test_dir data/testA --output_dir submissions/22211870121
-```
+```shell  
+python src/predict.py --model_path outputs/checkpoints/best_model.pth --test_dir data/testA --output_dir submissions/22211870121  # Prediction  
+```  
 
-```shell
-tensorboard --logdir=outputs/logs/{model_name}
-```
-## 实验过程
-1. 使用 U-Net 模型
+```shell  
+tensorboard --logdir=outputs/logs/{model_name}  # Visualization  
+```  
 
+## Experimental Process  
+1. Using the U-Net model  
 
-## 实验踩坑汇总
-1. 数据增强没有同步到mask(如水平、垂直翻转等),浪费大部分训练时间(具体表现为val loss不如数据增强前的)
-2. 补充1 准确来说 应该对mask作用位置变换而不作用像素变换 可以使用Albumentations的掩码保护操作 参考博客(https://ask.csdn.net/questions/8364948)
-3. 前期一直使用val_loss作为评价指标，结果一改loss就没有模型间可比较性，最后使用val的IoU最为评价指标并使用早停减少模型无效训练时间
+## Common Pitfalls and Solutions  
+1. **Data Augmentation Not Synchronized with Masks** (e.g., horizontal/vertical flipping) wasted significant training time (validation loss performed worse than without augmentation).  
+2. **Correction**: Masks should undergo spatial transformations (e.g., flipping) but not pixel-level transformations (e.g., brightness adjustments). Use Albumentations with mask protection (reference: [CSDN Blog](https://ask.csdn.net/questions/8364948)).  
+3. Initially relied on `val_loss` as the evaluation metric, but changing the loss function made models incomparable. Switched to **IoU on validation set** for evaluation and used **early stopping** to reduce unnecessary training time.  
 
-## 实验记录
-| Model | transforms           | Loss                | IoU(testA) | IoU(val) |
-| --- |----------------------|---------------------|------------|----------|
-| U-Net | none                 | DiceBCELoss         | 0.9667     | -        |
-| U-Net | basic+CoarseDropout+RandomBright | dice_bce+edge_loss+focal_loss | 0.9573 | -        |        |
-| U-Net|HorizontalFlip| DiceBCELoss | - | 0.9721   |
+## Experimental Records  
+| Model           | Transforms                       | Loss                          | IoU (TestA) | IoU (Val) |  
+|-----------------|----------------------------------|-------------------------------|-------------|-----------|  
+| U-Net           | None                             | DiceBCELoss                   | 0.9667      | 0.9700    |  
+| U-Net           | Basic + CoarseDropout + RandomBright | DiceBCE + Edge Loss + Focal Loss | 0.9573      | -         |  
+| U-Net           | HorizontalFlip                   | DiceBCELoss                   | -           | 0.9721    |  
+| U-Net           | HorizontalFlip + CoarseDropout   | DiceBCELoss + L2 Regularization | -           | 0.9722    |  
+| U-Net           | HorizontalFlip + CoarseDropout + RandomBright | DiceBCELoss + L2 Regularization | -           | 0.9696    |  
+| R2AttU_Net (t=2)| HorizontalFlip                   | DiceBCELoss                   | -           | 0.69      |  
+| R2AttU_Net (t=1)| HorizontalFlip                   | DiceBCELoss + L2 Regularization | -           | 0.7094    |  
 
-## 疑点
-1. 尝试过使用复杂参数量大的模型，效果很差，怀疑是因为数据集过于简单导致过拟合。
-2. 接1 使用复杂的数据增强尝试防止过拟合，效果依旧很差，不懂
-3. 
+## Key Observations  
+1. **Overfitting with Complex Models**: Larger models (e.g., R2AttU_Net) performed poorly, likely due to dataset simplicity.  
+2. **Ineffective Augmentation for Complex Models**: Even with heavy augmentation, complex models underperformed, possibly because PV panels have simple structures (e.g., rectangular shapes, low background noise).  
+3. **U-Net’s Advantage**: Skip connections in U-Net preserved local details effectively, while models like DeepLabV3+ (with ASPP) may introduce redundant computations.  
+
+## Training Visualizations  
+1. **U-Net Training Process**  
+   ![U-Net](./img/Unet-vis1.png)  
+2. **U-Net Dual-Experiment Comparison**  
+   ![U-Net](./img/u_net.png)  
+
+## References  
+1. [DeepLabV3+ Implementation](https://github.com/VainF/DeepLabV3Plus-Pytorch/blob/master/network/modeling.py)  
+2. [nnUNet Training Script](https://github.com/MIC-DKFZ/nnUNet/blob/master/nnunetv2/run/run_training.py)  
+3. [Nested U-Net Training](https://github.com/4uiiurz1/pytorch-nested-unet/blob/master/train.py#L252)  
+4. [U-Net Implementation](https://github.com/zhixuhao/unet)  
+5. [Solar Panel Mapping](https://github.com/PiyushBagde/SolarMap)

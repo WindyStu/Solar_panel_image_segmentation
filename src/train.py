@@ -7,9 +7,11 @@ from datetime import datetime
 
 from src.data.dataset import *
 from src.data.transforms import get_train_transforms, get_val_transforms
+from src.models.improved_unet import LightweightUNet
 from src.models.nested_unet import NestedUNet, AttU_Net, R2AttU_Net,U_Net
 from src.models.unet import UNet
-from src.models.losses import DiceBCELoss, SolarPanelLoss
+from src.models.losses import DiceBCELoss, SolarPanelLoss, DiceBCELoss_with_L2
+from src.models.DeepLabv3 import DeepLabV3Plus
 from src.utils.logger import TensorBoardLogger
 from sklearn.model_selection import train_test_split
 import os
@@ -23,9 +25,11 @@ class Trainer:
         # self.model = UNet(n_channels=3, n_classes=1).to(self.device)
         # self.model = NestedUNet(in_ch=3, out_ch=1).to(self.device)
         # self.model = AttU_Net(img_ch=3, output_ch=1).to(self.device)
-        # self.model = U_Net(in_ch=3, out_ch=1).to(self.device)
-        self.model = R2AttU_Net(in_ch=3, out_ch=1).to(self.device)
-        # self.model.load_state_dict(torch.load(config['model_path']))
+        self.model = U_Net(in_ch=3, out_ch=1).to(self.device)
+        # self.model = DeepLabV3Plus(n_classes=1).to(self.device)
+        # self.model = LightweightUNet().to(self.device)
+        # self.model = R2AttU_Net(in_ch=3, out_ch=1, t=1).to(self.device)
+        self.model.load_state_dict(torch.load(config['model_path']))
         if self.device.type == 'cuda':
             torch.backends.cudnn.enable = True
             torch.backends.cudnn.benchmark = True
@@ -33,7 +37,7 @@ class Trainer:
         all_images = sorted([f for f in os.listdir("data/train") if f.startswith('image')])
         train_images, val_images = train_test_split(
             all_images,
-            test_size=0.1,
+            test_size=0.2,
             random_state=42
         )
 
@@ -66,7 +70,7 @@ class Trainer:
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=3
         )
-        self.criterion = DiceBCELoss()
+        self.criterion = DiceBCELoss_with_L2()
 
         # 日志记录
         self.logger = TensorBoardLogger(
@@ -100,7 +104,7 @@ class Trainer:
             self.optimizer.zero_grad()
             with torch.cuda.amp.autocast():
                 outputs = self.model(images)
-                loss = self.criterion(outputs, masks)
+                loss = self.criterion(self.criterion, outputs, masks)
                 batch_iou = self.calculate_iou(outputs, masks)
                 total_iou += batch_iou.item()
 
@@ -124,8 +128,9 @@ class Trainer:
             for images, masks in tqdm(self.val_loader, desc="Validation"):
                 images, masks = images.to(self.device), masks.to(self.device)
                 outputs = self.model(images)
-                val_loss += self.criterion(outputs, masks).item()
+                val_loss += self.criterion(self.model, outputs, masks).item()
                 batch_iou = self.calculate_iou(outputs, masks)
+                # print(batch_iou)
                 total_iou += batch_iou.item()
 
         return val_loss / len(self.val_loader), total_iou / len(self.val_loader)
